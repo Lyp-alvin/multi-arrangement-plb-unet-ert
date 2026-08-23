@@ -207,11 +207,14 @@ results/experiment_metrics_summary.txt
 
 ## Data and checkpoint availability
 
-The small synthetic demo data are included in this repository. Trained best
-checkpoints can be distributed as GitHub Release assets or through a persistent
-archive. The full synthetic dataset is large and should be distributed through
-a persistent archive such as Zenodo or GitHub Releases. Update this section
-with the DOI or release URL before journal submission.
+The small synthetic demo data are included in this repository. The trained best
+checkpoints are available as the GitHub Release asset
+[`checkpoints_best.zip`](https://github.com/Lyp-alvin/multi-arrangement-plb-unet-ert/releases/download/v1.0.0/checkpoints_best.zip)
+under release
+[`v1.0.0`](https://github.com/Lyp-alvin/multi-arrangement-plb-unet-ert/releases/tag/v1.0.0).
+
+The full synthetic dataset is large and is not included in this repository.
+It can be distributed separately through a persistent archive if required.
 
 No field-measurement data are included in this repository.
 

@@ -16,9 +16,12 @@ checkpoints/
   ma_plb_unet_cl/inverse/inverse_multi_closed_loop_best.pth
 ```
 
-Download the release archive named `checkpoints_best.zip` from the repository's
-GitHub Releases page and extract it into this directory. The extracted folder
-layout should match the tree shown above.
+Download the release archive named
+[`checkpoints_best.zip`](https://github.com/Lyp-alvin/multi-arrangement-plb-unet-ert/releases/download/v1.0.0/checkpoints_best.zip)
+from GitHub Release
+[`v1.0.0`](https://github.com/Lyp-alvin/multi-arrangement-plb-unet-ert/releases/tag/v1.0.0)
+and extract it into this directory. The extracted folder layout should match
+the tree shown above.
 
 For long-term archival, a Zenodo snapshot can also be added before journal
 submission.
