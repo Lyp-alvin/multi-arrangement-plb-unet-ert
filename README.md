@@ -28,7 +28,6 @@ src/
   train_wa_closed_loop_lnn.py           SA-PLB-U-Net-CL training.
   train_multi_closed_loop_lnn.py        MA-PLB-U-Net-CL training.
   evaluate_new_experiment.py            Evaluation and prediction export.
-  field_pygimli_forward.py              pyGIMLi-based field forward checks.
 
 examples/demo_data/
   Six representative synthetic samples used for quick tests and figure-style
@@ -96,7 +95,7 @@ sequential recurrent scan over pixels.
 
 ## Installation
 
-The recommended environment is Python 3.10 or 3.11 with PyTorch and pyGIMLi.
+The recommended environment is Python 3.10 or 3.11 with PyTorch.
 An Anaconda environment can be created with:
 
 ```bash
@@ -208,16 +207,13 @@ results/experiment_metrics_summary.txt
 
 ## Data and checkpoint availability
 
-The small demo data are included in this repository. Trained best checkpoints
-are distributed as GitHub Release assets. The full synthetic dataset is large
-and should be distributed through a persistent archive such as Zenodo or GitHub
-Releases. Update this section with the DOI or release URL before journal
-submission.
+The small synthetic demo data are included in this repository. Trained best
+checkpoints can be distributed as GitHub Release assets or through a persistent
+archive. The full synthetic dataset is large and should be distributed through
+a persistent archive such as Zenodo or GitHub Releases. Update this section
+with the DOI or release URL before journal submission.
 
-Field data may be subject to project-specific restrictions. If the full field
-data cannot be publicly redistributed, provide an anonymized or processed
-example and document the restriction in the manuscript's data availability
-statement.
+No field-measurement data are included in this repository.
 
 ## License
 

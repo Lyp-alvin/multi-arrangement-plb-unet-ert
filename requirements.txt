@@ -4,5 +4,3 @@ matplotlib
 scikit-image
 tqdm
 torch
-pygimli
-

@@ -1,6 +1,5 @@
 name: ma-plb-unet-ert
 channels:
-  - pygimli
   - conda-forge
   - pytorch
   - nvidia
@@ -11,8 +10,6 @@ dependencies:
   - matplotlib
   - scikit-image
   - tqdm
-  - pygimli
   - pytorch
   - torchvision
   - pytorch-cuda=12.1
-
