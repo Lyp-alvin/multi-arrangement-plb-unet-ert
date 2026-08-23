@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+
+# Training outputs and large artifacts
+runs/
+outputs/
+*.pth
+*.pt
+*.ckpt
+*.zip
+*.rar
+*.7z
+
+# MATLAB temporary files
+*.asv
+*.fig
+
+# Local editor and environment files
+.vscode/
+.idea/
+.env
+.venv/
+venv/

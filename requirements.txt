@@ -1,0 +1,8 @@
+numpy
+scipy
+matplotlib
+scikit-image
+tqdm
+torch
+pygimli
+

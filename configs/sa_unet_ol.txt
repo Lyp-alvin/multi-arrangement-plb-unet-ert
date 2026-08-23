@@ -1,0 +1,4 @@
+experiment: SA-U-Net-OL
+inverse_batch_size: 10
+loss: model-domain MSE
+
