@@ -205,6 +205,25 @@ The reported metric summary is available at:
 results/experiment_metrics_summary.txt
 ```
 
+## Computational complexity
+
+Inference complexity for the four inversion configurations can be measured
+with:
+
+```bash
+python complexity_analysis.py --warmup 50 --repeats 200
+```
+
+The script reports trainable parameters, profiler FLOPs, batch-1 latency, and
+peak GPU memory for the inversion network only. Closed-loop forward surrogate
+networks are excluded because they are used for training consistency rather
+than deployment-time inversion. The generated summary is stored in:
+
+```text
+results/complexity_analysis.txt
+results/complexity_analysis.csv
+```
+
 ## Data and checkpoint availability
 
 The small synthetic demo data are included in this repository. The trained best

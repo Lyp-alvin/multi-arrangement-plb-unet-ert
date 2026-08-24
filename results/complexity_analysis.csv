@@ -1,0 +1,5 @@
+Method,Input shape,Checkpoint epoch,Params (M),Trainable params (M),FLOPs (G),Latency (ms/sample),Peak GPU Memory (GB)
+SA-U-Net-OL,"single WA tensor: (1, 1, 256, 1024)",35,5.838,5.838,65.054,4.256,0.197
+SA-U-Net-CL,"single WA tensor: (1, 1, 256, 1024)",45,5.838,5.838,65.054,4.233,0.197
+SA-LIB-U-Net-CL,"single WA tensor: (1, 1, 256, 1024)",28,7.284,7.284,61.718,12.115,0.484
+MA-LIB-U-Net-CL,"three tensors: WA/WB/SLM, each (1, 1, 256, 1024)",36,20.444,20.444,139.077,25.169,0.673
