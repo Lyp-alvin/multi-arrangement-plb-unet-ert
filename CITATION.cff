@@ -1,11 +1,10 @@
 cff-version: 1.2.0
-title: "Multi-arrangement PLB-U-Net for closed-loop ERT inversion"
+title: "Multi-arrangement LIB-U-Net for closed-loop ERT inversion"
 message: "If you use this software, please cite the associated manuscript."
 type: software
 authors:
   - family-names: "TBD"
     given-names: "TBD"
-repository-code: "https://github.com/TBD/multi-arrangement-plb-unet-ert"
+repository-code: "https://github.com/Lyp-alvin/multi-arrangement-plb-unet-ert"
 license: MIT
 date-released: "2026-08-23"
-

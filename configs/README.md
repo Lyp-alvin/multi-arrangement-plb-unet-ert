@@ -15,8 +15,7 @@ scheduler_patience: 2
 maximum_epochs: 100
 early_stopping_patience: 10
 AMP: disabled
-normalization: GroupNorm for PLB-based models
-closed_loop_inverse_weight: 0.8
-closed_loop_forward_weight: 0.2
+normalization: GroupNorm for LIB-based models
+closed_loop_weighting: inverse-gradient-norm adaptive weighting
+adaptive_weight_eps: 1e-8
 ```
-

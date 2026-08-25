@@ -1,7 +1,7 @@
 Experiment metrics summary
 ==========================
 
-Evaluation split: validation set (400 samples)
+Test split: validation set (400 samples)
 Value domain: log10 resistivity values stored in the MAT files
 best_val_loss: minimum validation loss during training
 trained epochs: actual completed epochs before early stopping (maximum configured: 100)
@@ -9,9 +9,10 @@ average_epoch_time: arithmetic mean of epoch_time_sec over all completed epochs
 RMSE, MAE and R2: pooled over all validation pixels
 PSNR and SSIM: mean of the 400 per-sample values
 
-For closed-loop inversion, best_val_loss is the weighted total loss:
-0.8 * L_inv + 0.2 * L_fwd. The inverse image metrics evaluate only
-the final predicted resistivity models.
+For closed-loop inversion, best_val_loss is the adaptively weighted total loss:
+w_inv * L_inv + w_fwd * L_fwd, where w_inv and w_fwd are determined from
+the inverse gradient norms of the two loss terms. The inverse image metrics
+evaluate only the final predicted resistivity models.
 
 
 1. unet_wa_open_loop

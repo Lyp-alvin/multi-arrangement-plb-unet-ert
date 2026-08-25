@@ -1,20 +1,20 @@
-# Multi-arrangement PLB-U-Net for ERT inversion
+# Multi-arrangement LIB-U-Net for ERT inversion
 
 This repository contains the reference implementation for a multi-arrangement
 closed-loop deep-learning framework for two-dimensional electrical resistivity
 tomography (ERT) inversion.
 
-The proposed model is referred to as **MA-PLB-U-Net-CL**:
+The proposed model is referred to as **MA-LIB-U-Net-CL**:
 
 - **MA**: multi-arrangement inputs from Wenner-alpha (WA), Wenner-beta (WB),
   and Schlumberger (SLM) arrays.
-- **PLB**: Parallel Liquid Block, a liquid-neural-network-inspired feature
+- **LIB**: Liquid-Inspired Block, a liquid-neural-network-inspired feature
   block for dense 2-D feature maps.
 - **CL**: closed-loop training using a frozen forward surrogate network.
 
 The code is intended to support the manuscript submitted to
 *Computers & Geosciences* and follows the journal's software availability
-requirements: source code, training workflows, evaluation scripts, dependency
+requirements: source code, training workflows, testing scripts, dependency
 information, and demo data are provided in a public repository.
 
 ## Repository contents
@@ -22,12 +22,12 @@ information, and demo data are provided in a public repository.
 ```text
 src/
   plain_unet.py                         Plain U-Net baseline.
-  lnn_unet.py                           PLB and PLB-U-Net implementation.
+  lnn_unet.py                           LIB and LIB-U-Net implementation.
   multi_lnn_unet.py                     Multi-arrangement forward/inverse models.
   train_wa_unet.py                      SA-U-Net-OL and SA-U-Net-CL training.
-  train_wa_closed_loop_lnn.py           SA-PLB-U-Net-CL training.
-  train_multi_closed_loop_lnn.py        MA-PLB-U-Net-CL training.
-  evaluate_new_experiment.py            Evaluation and prediction export.
+  train_wa_closed_loop_lnn.py           SA-LIB-U-Net-CL training.
+  train_multi_closed_loop_lnn.py        MA-LIB-U-Net-CL training.
+  test_new_experiment.py                Testing and prediction export.
 
 examples/demo_data/
   Six representative synthetic samples used for quick tests and figure-style
@@ -49,22 +49,26 @@ The manuscript compares four inversion settings:
 
 1. **SA-U-Net-OL**: single-arrangement U-Net open-loop inversion.
 2. **SA-U-Net-CL**: single-arrangement U-Net closed-loop inversion.
-3. **SA-PLB-U-Net-CL**: single-arrangement PLB-U-Net closed-loop inversion.
-4. **MA-PLB-U-Net-CL**: multi-arrangement PLB-U-Net closed-loop inversion
+3. **SA-LIB-U-Net-CL**: single-arrangement LIB-U-Net closed-loop inversion.
+4. **MA-LIB-U-Net-CL**: multi-arrangement LIB-U-Net closed-loop inversion
    (proposed method).
 
-For closed-loop inversion, the training objective is
+For closed-loop inversion, the model-domain and response-domain objectives are
+adaptively balanced by inverse gradient norms:
 
 ```text
-L_total = 0.8 * L_inv + 0.2 * L_fwd
+g_i = ||grad_phi L_i||_2
+w_i = (g_i + eps)^(-1) / sum_j (g_j + eps)^(-1), i in {inv, fwd}
+L_total = w_inv * L_inv + w_fwd * L_fwd
 ```
 
 where `L_inv` is the model-domain MSE and `L_fwd` is the apparent-resistivity
-response consistency loss computed by a frozen forward surrogate network.
+response consistency loss computed by a frozen forward surrogate network. The
+adaptive weighting avoids manually fixed closed-loop loss coefficients.
 
-## Parallel Liquid Block
+## Liquid-Inspired Block
 
-The core PLB implementation is in:
+The core LIB implementation is in:
 
 ```text
 src/lnn_unet.py
@@ -100,7 +104,7 @@ An Anaconda environment can be created with:
 
 ```bash
 conda env create -f environment.yml
-conda activate ma-plb-unet-ert
+conda activate ma-lib-unet-ert
 ```
 
 Alternatively:
@@ -142,17 +146,17 @@ slm_256_layered/rhoa_2d_<id>.mat         keys: img, mask
 From the repository root:
 
 ```bash
-python src/evaluate_new_experiment.py unet_open \
+python src/test_new_experiment.py unet_open \
   --data-root examples/demo_data \
   --run-dir checkpoints/sa_unet_ol \
   --max-samples 2
 ```
 
 This command requires a compatible checkpoint. If checkpoints are not present,
-the command documents the expected evaluation interface but will stop with a
+the command documents the expected testing interface but will stop with a
 missing-checkpoint error.
 
-To inspect the PLB module:
+To inspect the LIB module:
 
 ```bash
 python -m py_compile src/lnn_unet.py src/multi_lnn_unet.py
@@ -173,11 +177,11 @@ python src/train_wa_unet.py forward --data-root <data_root> --work-dir <run_dir>
 python src/train_wa_unet.py closed_inverse --data-root <data_root> --work-dir <run_dir> \
   --forward-checkpoint <run_dir>/forward/forward_unet_best.pth
 
-# SA-PLB-U-Net-CL
+# SA-LIB-U-Net-CL
 python src/train_wa_closed_loop_lnn.py forward --data-root <data_root> --work-dir <run_dir>
 python src/train_wa_closed_loop_lnn.py inverse --data-root <data_root> --work-dir <run_dir>
 
-# MA-PLB-U-Net-CL
+# MA-LIB-U-Net-CL
 python src/train_multi_closed_loop_lnn.py forward --data-root <data_root> --work-dir <run_dir>
 python src/train_multi_closed_loop_lnn.py inverse --data-root <data_root> --work-dir <run_dir>
 ```

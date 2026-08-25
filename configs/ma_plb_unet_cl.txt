@@ -1,10 +1,9 @@
-experiment: MA-PLB-U-Net-CL
+experiment: MA-LIB-U-Net-CL
 forward_physical_batch_size: 2
 forward_gradient_accumulation: 5
 inverse_physical_batch_size: 1
 inverse_gradient_accumulation: 4
 effective_forward_batch_size: 10
 effective_inverse_batch_size: 4
-inverse_weight: 0.8
-forward_weight: 0.2
-
+closed_loop_weighting: inverse-gradient-norm adaptive
+adaptive_weight_eps: 1e-8

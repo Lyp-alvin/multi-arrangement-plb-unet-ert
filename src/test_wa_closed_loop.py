@@ -262,7 +262,7 @@ def plot_loss_curve(csv_path: Path, output_path: Path, stage: str) -> None:
         train = np.asarray([float(row["train_loss_total"]) for row in rows])
         val = np.asarray([float(row["val_loss_total"]) for row in rows])
         title = "WA inverse closed-loop training loss"
-        ylabel = "Total loss (0.8 Linv + 0.2 Lfwd)"
+        ylabel = "Adaptive total loss"
 
     best_index = int(np.argmin(val))
     fig, axis = plt.subplots(figsize=(9.5, 5.8), constrained_layout=True)
@@ -287,7 +287,7 @@ def plot_loss_curve(csv_path: Path, output_path: Path, stage: str) -> None:
     plt.close(fig)
 
 
-def evaluate_forward(
+def test_forward(
     model: torch.nn.Module,
     loader: DataLoader,
     device: torch.device,
@@ -332,7 +332,7 @@ def evaluate_forward(
     return rows, summarize_rows(rows, accumulator)
 
 
-def evaluate_inverse(
+def test_inverse(
     model: torch.nn.Module,
     loader: DataLoader,
     device: torch.device,
@@ -443,7 +443,7 @@ def main() -> None:
     )
 
     forward_model, forward_payload = load_model(forward_checkpoint, device)
-    forward_rows, forward_summary = evaluate_forward(
+    forward_rows, forward_summary = test_forward(
         forward_model,
         build_loader(forward_dataset, args.batch_size, args.num_workers),
         device,
@@ -458,7 +458,7 @@ def main() -> None:
     print(f"forward pooled metrics: {forward_summary['pooled']}", flush=True)
 
     inverse_model, inverse_payload = load_model(inverse_checkpoint, device)
-    inverse_rows, inverse_summary = evaluate_inverse(
+    inverse_rows, inverse_summary = test_inverse(
         inverse_model,
         build_loader(inverse_dataset, args.batch_size, args.num_workers),
         device,

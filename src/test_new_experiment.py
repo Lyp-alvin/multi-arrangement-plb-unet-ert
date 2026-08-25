@@ -14,7 +14,7 @@ import numpy as np
 import scipy.io as sio
 import torch
 
-from evaluate_wa_closed_loop import (
+from test_wa_closed_loop import (
     MetricAccumulator,
     inverse_metrics,
     masked_forward_metrics,
@@ -159,7 +159,7 @@ def plot_loss(csv_path: Path, output_path: Path, stage: str):
     plt.close(fig)
 
 
-def evaluate_single_inverse(stage, model, dataset, loader, device, output_dir):
+def test_single_inverse(stage, model, dataset, loader, device, output_dir):
     png_dir = output_dir / "predictions_png"
     mat_dir = output_dir / "predictions_mat"
     png_dir.mkdir(parents=True, exist_ok=True)
@@ -185,7 +185,7 @@ def evaluate_single_inverse(stage, model, dataset, loader, device, output_dir):
     return rows, summarize_rows(rows, accumulator)
 
 
-def evaluate_plain_forward(model, dataset, loader, device, output_dir):
+def test_plain_forward(model, dataset, loader, device, output_dir):
     png_dir = output_dir / "predictions_png"
     mat_dir = output_dir / "predictions_mat"
     png_dir.mkdir(parents=True, exist_ok=True)
@@ -213,7 +213,7 @@ def evaluate_plain_forward(model, dataset, loader, device, output_dir):
     return rows, summarize_rows(rows, accumulator)
 
 
-def evaluate_multi_forward(model, loader, device, output_dir):
+def test_multi_forward(model, loader, device, output_dir):
     rows_by_name = {name: [] for name in ARRANGEMENTS}
     accumulators = {name: MetricAccumulator() for name in ARRANGEMENTS}
     for name in ARRANGEMENTS:
@@ -247,7 +247,7 @@ def evaluate_multi_forward(model, loader, device, output_dir):
     return rows_by_name, summaries
 
 
-def evaluate_multi_inverse(model, loader, device, output_dir):
+def test_multi_inverse(model, loader, device, output_dir):
     png_dir = output_dir / "predictions_png"
     mat_dir = output_dir / "predictions_mat"
     png_dir.mkdir(parents=True, exist_ok=True)
@@ -307,21 +307,21 @@ def main():
         if args.max_samples > 0:
             dataset.ids = dataset.ids[: args.max_samples]
         model, payload = load_model(build_plain_unet(), checkpoint, device)
-        rows, summary = evaluate_single_inverse(args.stage, model, dataset, build_loader(dataset, args.batch_size, False, args.num_workers, 43), device, output_dir)
+        rows, summary = test_single_inverse(args.stage, model, dataset, build_loader(dataset, args.batch_size, False, args.num_workers, 43), device, output_dir)
         write_csv(output_dir / "metrics_per_sample.csv", rows)
     elif args.stage == "unet_forward":
         dataset = WASingleArrayDataset(args.data_root, "val", "forward")
         if args.max_samples > 0:
             dataset.ids = dataset.ids[: args.max_samples]
         model, payload = load_model(build_plain_unet(), checkpoint, device)
-        rows, summary = evaluate_plain_forward(model, dataset, build_loader(dataset, args.batch_size, False, args.num_workers, 43), device, output_dir)
+        rows, summary = test_plain_forward(model, dataset, build_loader(dataset, args.batch_size, False, args.num_workers, 43), device, output_dir)
         write_csv(output_dir / "metrics_per_sample.csv", rows)
     elif args.stage == "multi_forward":
         dataset = MultiArrangementDataset(args.data_root, "val", include_inverse=False)
         if args.max_samples > 0:
             dataset.ids = dataset.ids[: args.max_samples]
         model, payload = load_model(build_multi_forward_lnn_unet(), checkpoint, device)
-        rows_by_name, summary = evaluate_multi_forward(model, build_loader(dataset, args.batch_size, False, args.num_workers, 43), device, output_dir)
+        rows_by_name, summary = test_multi_forward(model, build_loader(dataset, args.batch_size, False, args.num_workers, 43), device, output_dir)
         for name, rows in rows_by_name.items():
             write_csv(output_dir / name / "metrics_per_sample.csv", rows)
     else:
@@ -329,7 +329,7 @@ def main():
         if args.max_samples > 0:
             dataset.ids = dataset.ids[: args.max_samples]
         model, payload = load_model(build_multi_inverse_lnn_unet(), checkpoint, device)
-        rows, summary = evaluate_multi_inverse(model, build_loader(dataset, args.batch_size, False, args.num_workers, 43), device, output_dir)
+        rows, summary = test_multi_inverse(model, build_loader(dataset, args.batch_size, False, args.num_workers, 43), device, output_dir)
         write_csv(output_dir / "metrics_per_sample.csv", rows)
 
     result = {

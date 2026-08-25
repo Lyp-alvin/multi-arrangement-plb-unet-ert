@@ -7,7 +7,7 @@ python -m py_compile `
   src/train_wa_unet.py `
   src/train_wa_closed_loop_lnn.py `
   src/train_multi_closed_loop_lnn.py `
-  src/evaluate_new_experiment.py
+  src/test_wa_closed_loop.py `
+  src/test_new_experiment.py
 
 Write-Host "Python source files compiled successfully."
-

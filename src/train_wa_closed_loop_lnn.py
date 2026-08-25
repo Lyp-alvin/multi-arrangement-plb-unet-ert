@@ -46,8 +46,7 @@ class TrainConfig:
     early_stopping_patience: int
     num_workers: int
     seed: int
-    inverse_weight: float
-    forward_weight: float
+    adaptive_weight_eps: float
     use_amp: bool
 
 
@@ -156,6 +155,46 @@ def masked_mse(prediction: torch.Tensor, target: torch.Tensor, mask: torch.Tenso
     return (numerator / denominator).mean()
 
 
+def _gradient_norm(loss: torch.Tensor, parameters: list[torch.nn.Parameter]) -> torch.Tensor:
+    gradients = torch.autograd.grad(
+        loss,
+        parameters,
+        retain_graph=True,
+        create_graph=False,
+        allow_unused=True,
+    )
+    squared_norm = loss.new_zeros(())
+    for gradient in gradients:
+        if gradient is not None:
+            squared_norm = squared_norm + gradient.detach().pow(2).sum()
+    return squared_norm.sqrt()
+
+
+def adaptive_loss_weights(
+    inverse_loss: torch.Tensor,
+    forward_loss: torch.Tensor,
+    parameters: Iterable[torch.nn.Parameter],
+    eps: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Balance inverse/forward losses by inverse gradient norms.
+
+    The returned weights are detached scalars, so optimization does not involve
+    second-order derivatives through the weighting rule.
+    """
+    trainable_parameters = [parameter for parameter in parameters if parameter.requires_grad]
+    if not trainable_parameters:
+        raise ValueError("No trainable parameters available for adaptive closed-loop weighting.")
+
+    inverse_grad_norm = _gradient_norm(inverse_loss, trainable_parameters)
+    forward_grad_norm = _gradient_norm(forward_loss, trainable_parameters)
+    inverse_score = torch.reciprocal(inverse_grad_norm + float(eps))
+    forward_score = torch.reciprocal(forward_grad_norm + float(eps))
+    normalizer = inverse_score + forward_score
+    inverse_weight = (inverse_score / normalizer).detach()
+    forward_weight = (forward_score / normalizer).detach()
+    return inverse_weight, forward_weight, inverse_grad_norm.detach(), forward_grad_norm.detach()
+
+
 def create_logger(path: Path) -> logging.Logger:
     logger = logging.getLogger(str(path))
     logger.setLevel(logging.INFO)
@@ -202,8 +241,7 @@ def save_checkpoint(
             "epochs_without_improvement": epochs_without_improvement,
             "config": asdict(config),
             "seed": config.seed,
-            "inverse_weight": config.inverse_weight,
-            "forward_weight": config.forward_weight,
+            "adaptive_weight_eps": config.adaptive_weight_eps,
         },
         path,
     )
@@ -299,8 +337,7 @@ def inverse_epoch(
     loader: DataLoader,
     device: torch.device,
     optimizer: optim.Optimizer | None,
-    inverse_weight: float,
-    forward_weight: float,
+    adaptive_weight_eps: float,
     description: str,
     show_progress: bool,
     max_batches: int,
@@ -308,7 +345,17 @@ def inverse_epoch(
     training = optimizer is not None
     inverse_model.train(training)
     forward_model.eval()
-    sums = {"inv_raw": 0.0, "fwd_raw": 0.0, "inv_weighted": 0.0, "fwd_weighted": 0.0, "total": 0.0}
+    sums = {
+        "inv_raw": 0.0,
+        "fwd_raw": 0.0,
+        "inv_weighted": 0.0,
+        "fwd_weighted": 0.0,
+        "w_inv": 0.0,
+        "w_fwd": 0.0,
+        "g_inv": 0.0,
+        "g_fwd": 0.0,
+        "total": 0.0,
+    }
     sample_count = 0
     iterator = batch_iterator(loader, description, show_progress)
 
@@ -320,13 +367,20 @@ def inverse_epoch(
         wa_true = batch["wa_img"].to(device, non_blocking=True)
         wa_mask = batch["wa_mask"].to(device, non_blocking=True)
 
-        rho_pred = inverse_model(wa_inv)
-        wa_pred = forward_model(rho_pred)
-        inverse_loss = nn.functional.mse_loss(rho_pred, rho_true)
-        forward_loss = masked_mse(wa_pred, wa_true, wa_mask)
-        inverse_weighted = inverse_weight * inverse_loss
-        forward_weighted = forward_weight * forward_loss
-        total_loss = inverse_weighted + forward_weighted
+        with torch.enable_grad():
+            rho_pred = inverse_model(wa_inv)
+            wa_pred = forward_model(rho_pred)
+            inverse_loss = nn.functional.mse_loss(rho_pred, rho_true)
+            forward_loss = masked_mse(wa_pred, wa_true, wa_mask)
+            inverse_weight, forward_weight, inverse_grad_norm, forward_grad_norm = adaptive_loss_weights(
+                inverse_loss,
+                forward_loss,
+                inverse_model.parameters(),
+                adaptive_weight_eps,
+            )
+            inverse_weighted = inverse_weight * inverse_loss
+            forward_weighted = forward_weight * forward_loss
+            total_loss = inverse_weighted + forward_weighted
 
         if training:
             optimizer.zero_grad(set_to_none=True)
@@ -339,6 +393,10 @@ def inverse_epoch(
             "fwd_raw": forward_loss,
             "inv_weighted": inverse_weighted,
             "fwd_weighted": forward_weighted,
+            "w_inv": inverse_weight,
+            "w_fwd": forward_weight,
+            "g_inv": inverse_grad_norm,
+            "g_fwd": forward_grad_norm,
             "total": total_loss,
         }
         for key, value in values.items():
@@ -349,6 +407,8 @@ def inverse_epoch(
                 total=f"{sums['total'] / sample_count:.6f}",
                 Linv=f"{sums['inv_raw'] / sample_count:.6f}",
                 Lfwd=f"{sums['fwd_raw'] / sample_count:.6f}",
+                w_inv=f"{sums['w_inv'] / sample_count:.3f}",
+                w_fwd=f"{sums['w_fwd'] / sample_count:.3f}",
             )
 
     return {key: value / max(sample_count, 1) for key, value in sums.items()}
@@ -373,8 +433,7 @@ def prepare_stage(args: argparse.Namespace) -> tuple[TrainConfig, Path, logging.
         early_stopping_patience=args.early_stopping_patience,
         num_workers=args.num_workers,
         seed=args.seed,
-        inverse_weight=args.inverse_weight,
-        forward_weight=args.forward_weight,
+        adaptive_weight_eps=args.adaptive_weight_eps,
         use_amp=False,
     )
     (stage_dir / "config.json").write_text(json.dumps(asdict(config), indent=2), encoding="utf-8")
@@ -490,11 +549,19 @@ def train_inverse(args: argparse.Namespace) -> None:
         "train_Lfwd_raw",
         "train_Linv_weighted",
         "train_Lfwd_weighted",
+        "train_w_inv",
+        "train_w_fwd",
+        "train_g_inv",
+        "train_g_fwd",
         "val_loss_total",
         "val_Linv_raw",
         "val_Lfwd_raw",
         "val_Linv_weighted",
         "val_Lfwd_weighted",
+        "val_w_inv",
+        "val_w_fwd",
+        "val_g_inv",
+        "val_g_fwd",
         "lr",
         "epoch_time_sec",
     ]
@@ -502,26 +569,25 @@ def train_inverse(args: argparse.Namespace) -> None:
         epoch_start = time.perf_counter()
         train_metrics = inverse_epoch(
             inverse_model, forward_model, train_loader, device, optimizer,
-            args.inverse_weight, args.forward_weight,
+            args.adaptive_weight_eps,
             f"Inverse train {epoch}/{args.epochs}", not args.no_progress, args.max_train_batches,
         )
-        with torch.no_grad():
-            val_metrics = inverse_epoch(
-                inverse_model, forward_model, val_loader, device, None,
-                args.inverse_weight, args.forward_weight,
-                f"Inverse val {epoch}/{args.epochs}", not args.no_progress, args.max_val_batches,
-            )
+        val_metrics = inverse_epoch(
+            inverse_model, forward_model, val_loader, device, None,
+            args.adaptive_weight_eps,
+            f"Inverse val {epoch}/{args.epochs}", not args.no_progress, args.max_val_batches,
+        )
         scheduler.step(val_metrics["total"])
         elapsed = time.perf_counter() - epoch_start
         lr = optimizer.param_groups[0]["lr"]
         logger.info(
-            "Epoch %03d/%03d | Train total=%.8f Linv=%.8f (x%.2f=%.8f) Lfwd=%.8f (x%.2f=%.8f) | "
-            "Val total=%.8f Linv=%.8f (x%.2f=%.8f) Lfwd=%.8f (x%.2f=%.8f) | LR=%.3e | time=%.1fs",
+            "Epoch %03d/%03d | Train total=%.8f Linv=%.8f (w=%.4f weighted=%.8f g=%.4e) Lfwd=%.8f (w=%.4f weighted=%.8f g=%.4e) | "
+            "Val total=%.8f Linv=%.8f (w=%.4f weighted=%.8f g=%.4e) Lfwd=%.8f (w=%.4f weighted=%.8f g=%.4e) | LR=%.3e | time=%.1fs",
             epoch, args.epochs,
-            train_metrics["total"], train_metrics["inv_raw"], args.inverse_weight, train_metrics["inv_weighted"],
-            train_metrics["fwd_raw"], args.forward_weight, train_metrics["fwd_weighted"],
-            val_metrics["total"], val_metrics["inv_raw"], args.inverse_weight, val_metrics["inv_weighted"],
-            val_metrics["fwd_raw"], args.forward_weight, val_metrics["fwd_weighted"],
+            train_metrics["total"], train_metrics["inv_raw"], train_metrics["w_inv"], train_metrics["inv_weighted"], train_metrics["g_inv"],
+            train_metrics["fwd_raw"], train_metrics["w_fwd"], train_metrics["fwd_weighted"], train_metrics["g_fwd"],
+            val_metrics["total"], val_metrics["inv_raw"], val_metrics["w_inv"], val_metrics["inv_weighted"], val_metrics["g_inv"],
+            val_metrics["fwd_raw"], val_metrics["w_fwd"], val_metrics["fwd_weighted"], val_metrics["g_fwd"],
             lr, elapsed,
         )
         row = {
@@ -531,11 +597,19 @@ def train_inverse(args: argparse.Namespace) -> None:
             "train_Lfwd_raw": train_metrics["fwd_raw"],
             "train_Linv_weighted": train_metrics["inv_weighted"],
             "train_Lfwd_weighted": train_metrics["fwd_weighted"],
+            "train_w_inv": train_metrics["w_inv"],
+            "train_w_fwd": train_metrics["w_fwd"],
+            "train_g_inv": train_metrics["g_inv"],
+            "train_g_fwd": train_metrics["g_fwd"],
             "val_loss_total": val_metrics["total"],
             "val_Linv_raw": val_metrics["inv_raw"],
             "val_Lfwd_raw": val_metrics["fwd_raw"],
             "val_Linv_weighted": val_metrics["inv_weighted"],
             "val_Lfwd_weighted": val_metrics["fwd_weighted"],
+            "val_w_inv": val_metrics["w_inv"],
+            "val_w_fwd": val_metrics["w_fwd"],
+            "val_g_inv": val_metrics["g_inv"],
+            "val_g_fwd": val_metrics["g_fwd"],
             "lr": lr,
             "epoch_time_sec": elapsed,
         }
@@ -572,8 +646,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--early-stopping-patience", type=int, default=10)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--inverse-weight", type=float, default=0.8)
-    parser.add_argument("--forward-weight", type=float, default=0.2)
+    parser.add_argument("--adaptive-weight-eps", type=float, default=1e-8)
     parser.add_argument("--output-bias", type=float, default=2.5)
     parser.add_argument("--forward-checkpoint", default=str(DEFAULT_WORK_DIR / "forward" / "forward_lnn_unet_best.pth"))
     parser.add_argument("--resume", action="store_true")
@@ -585,8 +658,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    if not np.isclose(args.inverse_weight + args.forward_weight, 1.0):
-        raise ValueError("inverse-weight and forward-weight must sum to 1")
     set_seed(args.seed)
     if args.stage == "forward":
         train_forward(args)

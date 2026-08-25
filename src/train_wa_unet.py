@@ -12,6 +12,7 @@ from torch import nn, optim
 from plain_unet import build_plain_unet
 from train_wa_closed_loop_lnn import (
     WASingleArrayDataset,
+    adaptive_loss_weights,
     append_csv,
     build_loader,
     create_logger,
@@ -39,8 +40,7 @@ class Config:
     early_stopping_patience: int
     num_workers: int
     seed: int
-    inverse_weight: float
-    forward_weight: float
+    adaptive_weight_eps: float
     use_amp: bool = False
 
 
@@ -117,8 +117,7 @@ def prepare(args: argparse.Namespace):
         early_stopping_patience=args.early_stopping_patience,
         num_workers=args.num_workers,
         seed=args.seed,
-        inverse_weight=args.inverse_weight,
-        forward_weight=args.forward_weight,
+        adaptive_weight_eps=args.adaptive_weight_eps,
     )
     (stage_dir / "config.json").write_text(json.dumps(asdict(config), indent=2), encoding="utf-8")
     logger = create_logger(stage_dir / "train.log")
@@ -177,14 +176,23 @@ def closed_epoch(
     loader,
     device,
     optimizer,
-    inverse_weight: float,
-    forward_weight: float,
+    adaptive_weight_eps: float,
     max_batches: int,
 ) -> dict[str, float]:
     training = optimizer is not None
     inverse_model.train(training)
     forward_model.eval()
-    sums = {"total": 0.0, "inv_raw": 0.0, "fwd_raw": 0.0, "inv_weighted": 0.0, "fwd_weighted": 0.0}
+    sums = {
+        "total": 0.0,
+        "inv_raw": 0.0,
+        "fwd_raw": 0.0,
+        "inv_weighted": 0.0,
+        "fwd_weighted": 0.0,
+        "w_inv": 0.0,
+        "w_fwd": 0.0,
+        "g_inv": 0.0,
+        "g_fwd": 0.0,
+    }
     count = 0
     for batch_index, batch in enumerate(loader):
         if max_batches > 0 and batch_index >= max_batches:
@@ -193,13 +201,20 @@ def closed_epoch(
         rho_true = batch["rho"].to(device, non_blocking=True)
         forward_true = batch["wa_img"].to(device, non_blocking=True)
         mask = batch["wa_mask"].to(device, non_blocking=True)
-        rho_prediction = inverse_model(input_image)
-        forward_prediction = forward_model(rho_prediction)
-        inv_raw = nn.functional.mse_loss(rho_prediction, rho_true)
-        fwd_raw = masked_mse(forward_prediction, forward_true, mask)
-        inv_weighted = inverse_weight * inv_raw
-        fwd_weighted = forward_weight * fwd_raw
-        total_loss = inv_weighted + fwd_weighted
+        with torch.enable_grad():
+            rho_prediction = inverse_model(input_image)
+            forward_prediction = forward_model(rho_prediction)
+            inv_raw = nn.functional.mse_loss(rho_prediction, rho_true)
+            fwd_raw = masked_mse(forward_prediction, forward_true, mask)
+            inverse_weight, forward_weight, inverse_grad_norm, forward_grad_norm = adaptive_loss_weights(
+                inv_raw,
+                fwd_raw,
+                inverse_model.parameters(),
+                adaptive_weight_eps,
+            )
+            inv_weighted = inverse_weight * inv_raw
+            fwd_weighted = forward_weight * fwd_raw
+            total_loss = inv_weighted + fwd_weighted
         if training:
             optimizer.zero_grad(set_to_none=True)
             total_loss.backward()
@@ -211,6 +226,10 @@ def closed_epoch(
             "fwd_raw": fwd_raw,
             "inv_weighted": inv_weighted,
             "fwd_weighted": fwd_weighted,
+            "w_inv": inverse_weight,
+            "w_fwd": forward_weight,
+            "g_inv": inverse_grad_norm,
+            "g_fwd": forward_grad_norm,
         }
         for key, value in values.items():
             sums[key] += float(value.detach()) * batch_size
@@ -309,27 +328,31 @@ def train_closed(args) -> None:
         logger.info("Resumed from %s at epoch %d", last_path, start_epoch)
     fields = [
         "epoch", "train_loss_total", "train_Linv_raw", "train_Lfwd_raw", "train_Linv_weighted", "train_Lfwd_weighted",
-        "val_loss_total", "val_Linv_raw", "val_Lfwd_raw", "val_Linv_weighted", "val_Lfwd_weighted", "lr", "epoch_time_sec",
+        "train_w_inv", "train_w_fwd", "train_g_inv", "train_g_fwd",
+        "val_loss_total", "val_Linv_raw", "val_Lfwd_raw", "val_Linv_weighted", "val_Lfwd_weighted",
+        "val_w_inv", "val_w_fwd", "val_g_inv", "val_g_fwd", "lr", "epoch_time_sec",
     ]
     csv_path = stage_dir / "losses.csv"
     for epoch in range(start_epoch, args.epochs + 1):
         started = time.perf_counter()
-        train_metrics = closed_epoch(inverse_model, forward_model, train_loader, device, optimizer, args.inverse_weight, args.forward_weight, args.max_train_batches)
-        with torch.no_grad():
-            val_metrics = closed_epoch(inverse_model, forward_model, val_loader, device, None, args.inverse_weight, args.forward_weight, args.max_val_batches)
+        train_metrics = closed_epoch(inverse_model, forward_model, train_loader, device, optimizer, args.adaptive_weight_eps, args.max_train_batches)
+        val_metrics = closed_epoch(inverse_model, forward_model, val_loader, device, None, args.adaptive_weight_eps, args.max_val_batches)
         scheduler.step(val_metrics["total"])
         elapsed = time.perf_counter() - started
         lr = optimizer.param_groups[0]["lr"]
         logger.info(
-            "Epoch %03d/%03d | Train total=%.8f Linv=%.8f (weighted=%.8f) Lfwd=%.8f (weighted=%.8f) | Val total=%.8f Linv=%.8f (weighted=%.8f) Lfwd=%.8f (weighted=%.8f) | LR=%.3e time=%.1fs",
-            epoch, args.epochs, train_metrics["total"], train_metrics["inv_raw"], train_metrics["inv_weighted"], train_metrics["fwd_raw"], train_metrics["fwd_weighted"],
-            val_metrics["total"], val_metrics["inv_raw"], val_metrics["inv_weighted"], val_metrics["fwd_raw"], val_metrics["fwd_weighted"], lr, elapsed,
+            "Epoch %03d/%03d | Train total=%.8f Linv=%.8f (w=%.4f weighted=%.8f g=%.4e) Lfwd=%.8f (w=%.4f weighted=%.8f g=%.4e) | Val total=%.8f Linv=%.8f (w=%.4f weighted=%.8f g=%.4e) Lfwd=%.8f (w=%.4f weighted=%.8f g=%.4e) | LR=%.3e time=%.1fs",
+            epoch, args.epochs,
+            train_metrics["total"], train_metrics["inv_raw"], train_metrics["w_inv"], train_metrics["inv_weighted"], train_metrics["g_inv"], train_metrics["fwd_raw"], train_metrics["w_fwd"], train_metrics["fwd_weighted"], train_metrics["g_fwd"],
+            val_metrics["total"], val_metrics["inv_raw"], val_metrics["w_inv"], val_metrics["inv_weighted"], val_metrics["g_inv"], val_metrics["fwd_raw"], val_metrics["w_fwd"], val_metrics["fwd_weighted"], val_metrics["g_fwd"], lr, elapsed,
         )
         row = {"epoch": epoch, "lr": lr, "epoch_time_sec": elapsed}
         for prefix, metrics in (("train", train_metrics), ("val", val_metrics)):
             row.update({
                 f"{prefix}_loss_total": metrics["total"], f"{prefix}_Linv_raw": metrics["inv_raw"], f"{prefix}_Lfwd_raw": metrics["fwd_raw"],
                 f"{prefix}_Linv_weighted": metrics["inv_weighted"], f"{prefix}_Lfwd_weighted": metrics["fwd_weighted"],
+                f"{prefix}_w_inv": metrics["w_inv"], f"{prefix}_w_fwd": metrics["w_fwd"],
+                f"{prefix}_g_inv": metrics["g_inv"], f"{prefix}_g_fwd": metrics["g_fwd"],
             })
         append_csv(csv_path, fields, row)
         improved = val_metrics["total"] < best_val
@@ -361,8 +384,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--early-stopping-patience", type=int, default=10)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--inverse-weight", type=float, default=0.8)
-    parser.add_argument("--forward-weight", type=float, default=0.2)
+    parser.add_argument("--adaptive-weight-eps", type=float, default=1e-8)
     parser.add_argument("--output-bias", type=float, default=2.5)
     parser.add_argument("--forward-checkpoint", type=Path)
     parser.add_argument("--resume", action="store_true")

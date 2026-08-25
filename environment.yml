@@ -1,4 +1,4 @@
-name: ma-plb-unet-ert
+name: ma-lib-unet-ert
 channels:
   - conda-forge
   - pytorch

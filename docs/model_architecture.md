@@ -1,16 +1,16 @@
 # Model architecture
 
-## PLB
+## LIB
 
-The Parallel Liquid Block is implemented by `ParallelLiquidBlock2d` in
+The Liquid-Inspired Block is implemented by `ParallelLiquidBlock2d` in
 `src/lnn_unet.py`.
 
 The block uses GroupNorm, depthwise spatial mixing, a parameter generator, a
 closed-form liquid update, and a residual FFN.
 
-## Single-arrangement PLB-U-Net
+## Single-arrangement LIB-U-Net
 
-The single-arrangement PLB-U-Net is implemented in `src/lnn_unet.py`.
+The single-arrangement LIB-U-Net is implemented in `src/lnn_unet.py`.
 
 ## Multi-arrangement inverse network
 
@@ -32,4 +32,3 @@ It uses:
 
 - a shared encoder,
 - one decoder head per arrangement.
-
