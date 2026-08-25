@@ -36,9 +36,6 @@ examples/demo_data/
 scripts/
   MATLAB plotting scripts used to generate representative manuscript figures.
 
-results/
-  Summary of the validation metrics reported in the manuscript.
-
 checkpoints/
   Expected location of trained best checkpoints downloaded from GitHub Releases.
 ```
@@ -206,11 +203,7 @@ stopping are based on the unweighted validation `L_inv`. The adaptive
 frozen forward surrogate is not evaluated during validation for checkpoint
 selection.
 
-The reported metric summary is available at:
-
-```text
-results/experiment_metrics_summary.txt
-```
+The quantitative results are reported in the manuscript tables.
 
 ## Computational complexity
 
@@ -224,12 +217,8 @@ python complexity_analysis.py --warmup 50 --repeats 200
 The script reports trainable parameters, profiler FLOPs, batch-1 latency, and
 peak GPU memory for the inversion network only. Closed-loop forward surrogate
 networks are excluded because they are used for training consistency rather
-than deployment-time inversion. The generated summary is stored in:
-
-```text
-results/complexity_analysis.txt
-results/complexity_analysis.csv
-```
+than deployment-time inversion. The output directory can be controlled with
+`--output-dir`.
 
 ## Data and checkpoint availability
 
