@@ -138,9 +138,9 @@ def plot_loss(csv_path: Path, output_path: Path, stage: str):
     columns = {
         "unet_open": ("train_Linv_raw", "val_Linv_raw", "Plain U-Net WA open-loop loss", "Inversion MSE"),
         "unet_forward": ("train_Lfwd_raw", "val_Lfwd_raw", "Plain U-Net WA forward loss", "Masked forward MSE"),
-        "unet_closed": ("train_loss_total", "val_loss_total", "Plain U-Net WA closed-loop loss", "Total loss"),
+        "unet_closed": ("train_Linv_raw", "val_Linv_raw", "Plain U-Net WA closed-loop inversion loss", "Inversion MSE"),
         "multi_forward": ("train_total", "val_total", "LNN-U-Net multi-forward loss", "Mean masked MSE"),
-        "multi_inverse": ("train_total", "val_total", "LNN-U-Net multi-array closed-loop loss", "Total loss"),
+        "multi_inverse": ("train_inv_raw", "val_inv_raw", "LNN-U-Net multi-array closed-loop inversion loss", "Inversion MSE"),
     }
     train_key, val_key, title, ylabel = columns[stage]
     train = np.asarray([float(row[train_key]) for row in rows])

@@ -199,9 +199,9 @@ def closed_epoch(
             break
         input_image = batch["wa_inv"].to(device, non_blocking=True)
         rho_true = batch["rho"].to(device, non_blocking=True)
-        forward_true = batch["wa_img"].to(device, non_blocking=True)
-        mask = batch["wa_mask"].to(device, non_blocking=True)
-        with torch.enable_grad():
+        if training:
+            forward_true = batch["wa_img"].to(device, non_blocking=True)
+            mask = batch["wa_mask"].to(device, non_blocking=True)
             rho_prediction = inverse_model(input_image)
             forward_prediction = forward_model(rho_prediction)
             inv_raw = nn.functional.mse_loss(rho_prediction, rho_true)
@@ -215,10 +215,22 @@ def closed_epoch(
             inv_weighted = inverse_weight * inv_raw
             fwd_weighted = forward_weight * fwd_raw
             total_loss = inv_weighted + fwd_weighted
-        if training:
             optimizer.zero_grad(set_to_none=True)
             total_loss.backward()
             optimizer.step()
+        else:
+            with torch.no_grad():
+                rho_prediction = inverse_model(input_image)
+                inv_raw = nn.functional.mse_loss(rho_prediction, rho_true)
+            nan = torch.tensor(float("nan"), device=device)
+            fwd_raw = nan
+            inverse_weight = nan
+            forward_weight = nan
+            inverse_grad_norm = nan
+            forward_grad_norm = nan
+            inv_weighted = inv_raw
+            fwd_weighted = nan
+            total_loss = inv_raw
         batch_size = input_image.shape[0]
         values = {
             "total": total_loss,
@@ -337,7 +349,8 @@ def train_closed(args) -> None:
         started = time.perf_counter()
         train_metrics = closed_epoch(inverse_model, forward_model, train_loader, device, optimizer, args.adaptive_weight_eps, args.max_train_batches)
         val_metrics = closed_epoch(inverse_model, forward_model, val_loader, device, None, args.adaptive_weight_eps, args.max_val_batches)
-        scheduler.step(val_metrics["total"])
+        selection_loss = val_metrics["inv_raw"]
+        scheduler.step(selection_loss)
         elapsed = time.perf_counter() - started
         lr = optimizer.param_groups[0]["lr"]
         logger.info(
@@ -355,15 +368,15 @@ def train_closed(args) -> None:
                 f"{prefix}_g_inv": metrics["g_inv"], f"{prefix}_g_fwd": metrics["g_fwd"],
             })
         append_csv(csv_path, fields, row)
-        improved = val_metrics["total"] < best_val
+        improved = selection_loss < best_val
         if improved:
-            best_val, no_improvement = val_metrics["total"], 0
+            best_val, no_improvement = selection_loss, 0
         else:
             no_improvement += 1
         save_checkpoint(last_path, args.stage, epoch, inverse_model, optimizer, scheduler, best_val, no_improvement, config)
         if improved:
             save_checkpoint(best_path, args.stage, epoch, inverse_model, optimizer, scheduler, best_val, no_improvement, config)
-            logger.info("Saved best inverse model: val_total=%.8f", best_val)
+            logger.info("Saved best inverse model: val_Linv=%.8f", best_val)
         if no_improvement >= args.early_stopping_patience:
             logger.info("Early stopping after %d epochs without improvement", no_improvement)
             break

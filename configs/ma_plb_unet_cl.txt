@@ -7,3 +7,4 @@ effective_forward_batch_size: 10
 effective_inverse_batch_size: 4
 closed_loop_weighting: inverse-gradient-norm adaptive
 adaptive_weight_eps: 1e-8
+checkpoint_selection: validation L_inv

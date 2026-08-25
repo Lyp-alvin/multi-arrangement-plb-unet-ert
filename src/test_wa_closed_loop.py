@@ -259,10 +259,10 @@ def plot_loss_curve(csv_path: Path, output_path: Path, stage: str) -> None:
         title = "WA forward training loss"
         ylabel = "Masked forward MSE"
     else:
-        train = np.asarray([float(row["train_loss_total"]) for row in rows])
-        val = np.asarray([float(row["val_loss_total"]) for row in rows])
-        title = "WA inverse closed-loop training loss"
-        ylabel = "Adaptive total loss"
+        train = np.asarray([float(row["train_Linv_raw"]) for row in rows])
+        val = np.asarray([float(row["val_Linv_raw"]) for row in rows])
+        title = "WA inverse closed-loop inversion loss"
+        ylabel = "Inverse MSE"
 
     best_index = int(np.argmin(val))
     fig, axis = plt.subplots(figsize=(9.5, 5.8), constrained_layout=True)

@@ -364,10 +364,10 @@ def inverse_epoch(
             break
         wa_inv = batch["wa_inv"].to(device, non_blocking=True)
         rho_true = batch["rho"].to(device, non_blocking=True)
-        wa_true = batch["wa_img"].to(device, non_blocking=True)
-        wa_mask = batch["wa_mask"].to(device, non_blocking=True)
 
-        with torch.enable_grad():
+        if training:
+            wa_true = batch["wa_img"].to(device, non_blocking=True)
+            wa_mask = batch["wa_mask"].to(device, non_blocking=True)
             rho_pred = inverse_model(wa_inv)
             wa_pred = forward_model(rho_pred)
             inverse_loss = nn.functional.mse_loss(rho_pred, rho_true)
@@ -381,11 +381,22 @@ def inverse_epoch(
             inverse_weighted = inverse_weight * inverse_loss
             forward_weighted = forward_weight * forward_loss
             total_loss = inverse_weighted + forward_weighted
-
-        if training:
             optimizer.zero_grad(set_to_none=True)
             total_loss.backward()
             optimizer.step()
+        else:
+            with torch.no_grad():
+                rho_pred = inverse_model(wa_inv)
+                inverse_loss = nn.functional.mse_loss(rho_pred, rho_true)
+            nan = torch.tensor(float("nan"), device=device)
+            forward_loss = nan
+            inverse_weight = nan
+            forward_weight = nan
+            inverse_grad_norm = nan
+            forward_grad_norm = nan
+            inverse_weighted = inverse_loss
+            forward_weighted = nan
+            total_loss = inverse_loss
 
         batch_size = wa_inv.shape[0]
         values = {
@@ -577,7 +588,8 @@ def train_inverse(args: argparse.Namespace) -> None:
             args.adaptive_weight_eps,
             f"Inverse val {epoch}/{args.epochs}", not args.no_progress, args.max_val_batches,
         )
-        scheduler.step(val_metrics["total"])
+        selection_loss = val_metrics["inv_raw"]
+        scheduler.step(selection_loss)
         elapsed = time.perf_counter() - epoch_start
         lr = optimizer.param_groups[0]["lr"]
         logger.info(
@@ -615,16 +627,16 @@ def train_inverse(args: argparse.Namespace) -> None:
         }
         append_csv(csv_path, fields, row)
 
-        improved = val_metrics["total"] < best_val
+        improved = selection_loss < best_val
         if improved:
-            best_val = val_metrics["total"]
+            best_val = selection_loss
             no_improvement = 0
         else:
             no_improvement += 1
         save_checkpoint(last_path, "inverse", epoch, inverse_model, optimizer, scheduler, best_val, no_improvement, config)
         if improved:
             save_checkpoint(best_path, "inverse", epoch, inverse_model, optimizer, scheduler, best_val, no_improvement, config)
-            logger.info("Saved best inverse model: val_total=%.8f", best_val)
+            logger.info("Saved best inverse model: val_Linv=%.8f", best_val)
         if no_improvement >= args.early_stopping_patience:
             logger.info("Early stopping after %d epochs without improvement", no_improvement)
             break

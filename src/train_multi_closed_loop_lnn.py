@@ -259,7 +259,7 @@ def multi_inverse_epoch(
             for name in ARRANGEMENTS
         }
         rho_true = batch["rho"].to(device, non_blocking=True)
-        with torch.enable_grad():
+        if training:
             rho_prediction = inverse_model(inverse_inputs)
             forward_predictions = forward_model(rho_prediction)
             inv_raw = nn.functional.mse_loss(rho_prediction, rho_true)
@@ -281,11 +281,24 @@ def multi_inverse_epoch(
             inv_weighted = inverse_weight * inv_raw
             fwd_weighted = forward_weight * fwd_raw
             total_loss = inv_weighted + fwd_weighted
-        if training:
             (total_loss / accumulation_steps).backward()
             if (batch_index + 1) % accumulation_steps == 0 or batch_index + 1 == limit:
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
+        else:
+            with torch.no_grad():
+                rho_prediction = inverse_model(inverse_inputs)
+                inv_raw = nn.functional.mse_loss(rho_prediction, rho_true)
+            nan = torch.tensor(float("nan"), device=device)
+            forward_losses = {name: nan for name in ARRANGEMENTS}
+            fwd_raw = nan
+            inverse_weight = nan
+            forward_weight = nan
+            inverse_grad_norm = nan
+            forward_grad_norm = nan
+            inv_weighted = inv_raw
+            fwd_weighted = nan
+            total_loss = inv_raw
         batch_size = rho_true.shape[0]
         values = {
             "total": total_loss,
@@ -390,7 +403,8 @@ def train_inverse(args):
             inverse_model, forward_model, val_loader, device, None, 1,
             args.adaptive_weight_eps, args.max_val_batches,
         )
-        scheduler.step(val_metrics["total"])
+        selection_loss = val_metrics["inv_raw"]
+        scheduler.step(selection_loss)
         elapsed = time.perf_counter() - started
         lr = optimizer.param_groups[0]["lr"]
         logger.info(
@@ -406,12 +420,12 @@ def train_inverse(args):
             for key in metric_keys:
                 row[f"{prefix}_{key}"] = metrics[key]
         append_csv(stage_dir / "losses.csv", fields, row)
-        improved = val_metrics["total"] < best_val
-        best_val, no_improvement = (val_metrics["total"], 0) if improved else (best_val, no_improvement + 1)
+        improved = selection_loss < best_val
+        best_val, no_improvement = (selection_loss, 0) if improved else (best_val, no_improvement + 1)
         save_checkpoint(last_path, args.stage, epoch, inverse_model, optimizer, scheduler, best_val, no_improvement, config)
         if improved:
             save_checkpoint(best_path, args.stage, epoch, inverse_model, optimizer, scheduler, best_val, no_improvement, config)
-            logger.info("Saved best multi-inverse model: val_total=%.8f", best_val)
+            logger.info("Saved best multi-inverse model: val_Linv=%.8f", best_val)
         if no_improvement >= args.early_stopping_patience:
             logger.info("Early stopping after %d epochs without improvement", no_improvement)
             break

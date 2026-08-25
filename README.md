@@ -200,8 +200,11 @@ The manuscript reports:
 - SSIM,
 - R2.
 
-For closed-loop inversion, `best_val_loss` is the weighted total loss, while
-the fair model-domain comparison uses the unweighted `L_inv`.
+For closed-loop inversion, `best_val_loss`, learning-rate scheduling, and early
+stopping are based on the unweighted validation `L_inv`. The adaptive
+`L_total = w_inv L_inv + w_fwd L_fwd` is used as the training objective, but the
+frozen forward surrogate is not evaluated during validation for checkpoint
+selection.
 
 The reported metric summary is available at:
 

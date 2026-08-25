@@ -18,4 +18,5 @@ AMP: disabled
 normalization: GroupNorm for LIB-based models
 closed_loop_weighting: inverse-gradient-norm adaptive weighting
 adaptive_weight_eps: 1e-8
+checkpoint_selection: validation L_inv for closed-loop inversion
 ```
