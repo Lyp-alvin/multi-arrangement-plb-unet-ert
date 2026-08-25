@@ -12,7 +12,7 @@ closed-form liquid update, and a residual FFN.
 
 The single-arrangement LIB-U-Net is implemented in `src/lnn_unet.py`.
 
-## Multi-arrangement inverse network
+## Multiarray inverse network
 
 The proposed inverse model is implemented by `MultiInverseLNNUNet` in
 `src/multi_lnn_unet.py`.
@@ -23,7 +23,7 @@ It uses:
 - scale-wise feature fusion by concatenation and 1 x 1 convolution,
 - one shared decoder.
 
-## Multi-arrangement forward network
+## Multiarray forward network
 
 The forward surrogate is implemented by `MultiForwardLNNUNet` in
 `src/multi_lnn_unet.py`.

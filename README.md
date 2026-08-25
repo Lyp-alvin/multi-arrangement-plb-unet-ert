@@ -1,12 +1,12 @@
-# Multiarray LIB-U-Net for ERT inversion
+# Multiarray Closed-Loop Electrical Resistivity Tomography with Liquid-Inspired Feature Dynamics
 
-This repository contains the reference implementation for a multi-arrangement
+This repository contains the reference implementation for a multiarray
 closed-loop deep-learning framework for two-dimensional electrical resistivity
 tomography (ERT) inversion.
 
 The proposed model is referred to as **MA-LIB-U-Net-CL**:
 
-- **MA**: multi-arrangement inputs from Wenner-alpha (WA), Wenner-beta (WB),
+- **MA**: multiarray inputs from Wenner-alpha (WA), Wenner-beta (WB),
   and Schlumberger (SLM) arrays.
 - **LIB**: Liquid-Inspired Block, a liquid-neural-network-inspired feature
   block for dense 2-D feature maps.
@@ -23,7 +23,7 @@ information, and demo data are provided in a public repository.
 src/
   plain_unet.py                         Plain U-Net baseline.
   lnn_unet.py                           LIB and LIB-U-Net implementation.
-  multi_lnn_unet.py                     Multi-arrangement forward/inverse models.
+  multi_lnn_unet.py                     Multiarray forward/inverse models.
   train_wa_unet.py                      SA-U-Net-OL and SA-U-Net-CL training.
   train_wa_closed_loop_lnn.py           SA-LIB-U-Net-CL training.
   train_multi_closed_loop_lnn.py        MA-LIB-U-Net-CL training.
@@ -47,7 +47,7 @@ The manuscript compares four inversion settings:
 1. **SA-U-Net-OL**: single-arrangement U-Net open-loop inversion.
 2. **SA-U-Net-CL**: single-arrangement U-Net closed-loop inversion.
 3. **SA-LIB-U-Net-CL**: single-arrangement LIB-U-Net closed-loop inversion.
-4. **MA-LIB-U-Net-CL**: multi-arrangement LIB-U-Net closed-loop inversion
+4. **MA-LIB-U-Net-CL**: multiarray LIB-U-Net closed-loop inversion
    (proposed method).
 
 For closed-loop inversion, the model-domain and response-domain objectives are

@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: "Multi-arrangement LIB-U-Net for closed-loop ERT inversion"
+title: "Multiarray Closed-Loop Electrical Resistivity Tomography with Liquid-Inspired Feature Dynamics"
 message: "If you use this software, please cite the associated manuscript."
 type: software
 authors:
