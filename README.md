@@ -1,4 +1,4 @@
-# Multi-arrangement LIB-U-Net for ERT inversion
+# Multiarray LIB-U-Net for ERT inversion
 
 This repository contains the reference implementation for a multi-arrangement
 closed-loop deep-learning framework for two-dimensional electrical resistivity
